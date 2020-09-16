@@ -1,6 +1,6 @@
 # TODO: cross-compile supports is rudimentary
 
-project('uftrace', 'c', version: '0.9.4')
+project('uftrace', ['c', 'cpp'], version: '0.9.4')
 python_module = import('python')
 
 common_cflags = ['-D_GNU_SOURCE', '-D_DEFAULT_SOURCE', '-D_XOPEN_SOURCE=600']
@@ -142,6 +142,71 @@ version_h = custom_target(
     'gen_version_h',
     output: 'version.h',
     command: [program_shell, '-c', version_sh.path() + ' @OUTPUT@' + ' ' + version_sh_cmd + ' .' + ' > /dev/null'],
+)
+
+###########
+# libexpr #
+###########
+
+libexpr_include = include_directories('libexpr/include')
+libexpr_sources = [
+    'libexpr/source/expr/child/one.cpp',
+    'libexpr/source/expr/child/two.cpp',
+    'libexpr/source/expr/child/zero.cpp',
+    'libexpr/source/expr/bound.cpp',
+    'libexpr/source/expr/constant.cpp',
+    'libexpr/source/expr/expr.cpp',
+    'libexpr/source/expr/operation.cpp',
+    'libexpr/source/expr/register.cpp',
+    'libexpr/source/expr/root.cpp',
+    'libexpr/source/impl/process_memory.cpp',
+    'libexpr/source/context.cpp',
+    'libexpr/source/range.cpp',
+]
+
+libexpr = static_library(
+    'expr', libexpr_sources,
+    include_directories: [libexpr_include],
+    cpp_args: ['-std=c++17', '-Wall'],
+)
+
+libexpr_dep = declare_dependency(
+    include_directories: [libexpr_include],
+    link_with: libexpr,
+)
+
+libexpr_tests_include = include_directories('libexpr/tests')
+libexpr_tests_sources = [
+    'libexpr/tests/expr/child/two.cpp',
+    'libexpr/tests/expr/extend.cpp',
+    'libexpr/tests/expr/expr.cpp',
+    'libexpr/tests/impl/process_memory.cpp',
+    'libexpr/tests/context.cpp',
+    'libexpr/tests/main.cpp',
+    'libexpr/tests/range.cpp',
+    'libexpr/tests/utils.cpp',
+]
+
+libexpr_tests = executable(
+    'libexpr-tests', libexpr_sources, libexpr_tests_sources,
+    include_directories: [libexpr_include, libexpr_tests_include],
+    cpp_args: ['-std=c++17', '-Wall'],
+)
+
+run_target('libexpr-check',
+    command: [libexpr_tests],
+)
+
+libexpr_find_include = '`find include -type f -iname \'*.hpp\'`'
+libexpr_find_source = '`find source -type f -iname \'*.cpp\'`'
+libexpr_find_tests = '`find tests -type f -iname \'*.cpp\'`'
+libexpr_find_format = libexpr_find_include + ' ' + libexpr_find_source + ' ' + libexpr_find_tests
+
+run_target('libexpr-format',
+    command: [
+        'sh', '-c',
+        'cd libexpr && clang-format --verbose -i ' + libexpr_find_format
+    ],
 )
 
 #############################
