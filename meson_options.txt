@@ -1,0 +1,106 @@
+option(
+    'arch',
+    type : 'combo',
+    value : 'auto',
+    choices : ['auto', 'aarch64', 'arm', 'i386', 'x86_64'],
+    description: 'Build for target architecture',
+)
+
+option(
+    'doc-lang',
+    type : 'combo',
+    value : 'en',
+    choices: ['en', 'ko'],
+    description: 'Generate man pages for this language',
+)
+
+option(
+    'without-doc',
+    type : 'feature',
+    value : 'disabled',
+    description: 'Don\'t generate man page',
+)
+
+option(
+    'without-libcapstone',
+    type : 'feature',
+    value : 'disabled',
+    description: 'Build without libcapstone',
+)
+
+option(
+    'without-libdw',
+    type : 'feature',
+    value : 'disabled',
+    description: 'Build without libdw',
+)
+
+option(
+    'without-libelf',
+    type : 'feature',
+    value : 'disabled',
+    description: 'Build without libelf (and libdw)',
+)
+
+option(
+    'without-libluajit',
+    type : 'feature',
+    value : 'disabled',
+    description: 'Build without libluajit',
+)
+
+option(
+    'without-libncurses',
+    type : 'feature',
+    value : 'disabled',
+    description: 'Build without libncurses',
+)
+
+option(
+    'without-libpython',
+    type : 'feature',
+    value : 'disabled',
+    description: 'Build without libpython',
+)
+
+option(
+    'without-libstdcxx',
+    type : 'feature',
+    value : 'disabled',
+    description: 'Build without libstdc++',
+)
+
+option(
+    'without-perf',
+    type : 'feature',
+    value : 'disabled',
+    description: 'Build without perf event',
+)
+
+option(
+    'without-schedule',
+    type : 'feature',
+    value : 'disabled',
+    description: 'Build without schedule event',
+)
+
+option(
+    'with-tests',
+    type : 'feature',
+    value : 'disabled',
+    description: 'Build with unit tests',
+)
+
+option(
+    'build-dbginfo',
+    type : 'feature',
+    value : 'disabled',
+    description: 'Build dbginfo binary',
+)
+
+option(
+    'build-demangler',
+    type : 'feature',
+    value : 'disabled',
+    description: 'Build demangler binary',
+)
