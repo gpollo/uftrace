@@ -209,6 +209,57 @@ run_target('libexpr-format',
     ],
 )
 
+##############
+# librecover #
+##############
+
+librecover_include = include_directories('librecover/include')
+librecover_sources = [
+    'librecover/source/x86/resolver.cpp',
+    'librecover/source/utils.cpp',
+]
+
+librecover = static_library(
+    'recover', librecover_sources,
+    include_directories: [librecover_include],
+    cpp_args: ['-std=c++17', '-Wall'],
+    dependencies: [libexpr_dep, libcapstone_dep],
+)
+
+librecover_dep = declare_dependency(
+    include_directories: [librecover_include],
+    link_with: librecover,
+)
+
+librecover_tests_include = include_directories('librecover/tests')
+librecover_tests_sources = [
+    'librecover/tests/x86/resolver.cpp',
+    'librecover/tests/main.cpp',
+]
+
+librecover_tests = executable(
+    'librecover-tests', librecover_sources, librecover_tests_sources,
+    include_directories: [librecover_include, librecover_tests_include],
+    cpp_args: ['-std=c++17', '-Wall'],
+    dependencies: [libexpr_dep, libcapstone_dep],
+)
+
+run_target('librecover-check',
+    command: [librecover_tests]
+)
+
+librecover_find_include = '`find include -type f -iname \'*.hpp\'`'
+librecover_find_source = '`find source -type f -iname \'*.cpp\'`'
+librecover_find_tests = '`find tests -type f -iname \'*.cpp\'`'
+librecover_find_format = librecover_find_include + ' ' + librecover_find_source + ' ' + librecover_find_tests
+
+run_target('librecover-format',
+    command: [
+        'sh', '-c',
+        'cd librecover && clang-format --verbose -i ' + librecover_find_format
+    ],
+)
+
 #############################
 # libmcount (arch specific) #
 #############################
