@@ -277,6 +277,7 @@ if arch == 'aarch64'
         'arch/aarch64/mcount.S',
         'arch/aarch64/plthook.S',
     ]
+    libmcount_arch_deps = []
 elif arch == 'arm'
     libmcount_arch_include = include_directories('arch/arm')
     libmcount_arch_sources = [
@@ -287,6 +288,7 @@ elif arch == 'arm'
         'arch/arm/mcount.S',
         'arch/arm/plthook.S',
     ]
+    libmcount_arch_deps = []
 elif arch == 'i386'
     libmcount_arch_include = include_directories('arch/i386')
     libmcount_arch_sources = [
@@ -300,6 +302,7 @@ elif arch == 'i386'
         'arch/i386/mcount.S',
         'arch/i386/plthook.S',
     ]
+    libmcount_arch_deps = []
 elif arch == 'x86_64'
     libmcount_arch_include = include_directories('arch/x86_64')
     libmcount_arch_sources = [
@@ -318,6 +321,7 @@ elif arch == 'x86_64'
         'arch/x86_64/plthook.S',
         'arch/x86_64/xray.S',
     ]
+    libmcount_arch_deps = [librecover_dep]
 else
     error('target architecture `@0@` is not supported'.format(arch))
 endif
@@ -364,6 +368,7 @@ libmcount_base_deps = [
     libdw_dep,
     libelf_dep,
     libluajit_dep,
+    libmcount_arch_deps,
     libncurses_dep,
     libpthread_dep,
     libpython3_dep,
@@ -613,6 +618,7 @@ unittests_deps = [
     libdw_dep,
     libelf_dep,
     libluajit_dep,
+    libmcount_arch_deps,
     libncurses_dep,
     libpthread_dep,
     libpython3_dep,
@@ -625,7 +631,7 @@ tests_unittest_h = tests_dir + '/unittest.h'
 if get_option('with-tests').enabled()
     unittests = executable(
         'unittests', [unittests_sources],
-        include_directories: [unittests_includes, libmcount_arch_include, libmcount_include],
+        include_directories: [unittests_includes, libmcount_arch_include, libmcount_include, librecover_include],
         dependencies: unittests_deps,
         c_args: [common_cflags, '-DUNIT_TEST', '-include', tests_unittest_h],
     )
