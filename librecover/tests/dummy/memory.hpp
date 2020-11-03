@@ -1,6 +1,7 @@
 #include <unordered_map>
 
 #include "libexpr/context.hpp"
+#include "libexpr/utils.hpp"
 
 namespace tests {
 
@@ -36,7 +37,7 @@ public:
             return success;
         }
 
-        auto type = typeid(OutputType).name();
+        auto type = utils::type_name<OutputType>::name;
         std::cerr << "read (" << type << ") "<< "at address 0x" << std::hex << addr << " = ";
 
         if (success) {

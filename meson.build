@@ -162,6 +162,7 @@ libexpr_sources = [
     'libexpr/source/impl/process_memory.cpp',
     'libexpr/source/context.cpp',
     'libexpr/source/range.cpp',
+    'libexpr/source/utils.cpp',
 ]
 
 libexpr = static_library(

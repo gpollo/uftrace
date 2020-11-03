@@ -6,6 +6,7 @@
 
 #include "libexpr/context.hpp"
 #include "libexpr/expr/child/one.hpp"
+#include "libexpr/utils.hpp"
 
 namespace libexpr {
 
@@ -37,7 +38,7 @@ expr_ptr memory_expr<AddrSize, WordType>::deep_copy() const {
 
 template <unsigned int AddrSize, typename WordType>
 std::string memory_expr<AddrSize, WordType>::get_name() const {
-    return "memory-a" + std::to_string(AddrSize) + "-" + typeid(WordType).name();
+    return "memory-" + std::to_string(AddrSize) + "-" + utils::type_name<WordType>::name;
 }
 
 template <unsigned int AddrSize>

@@ -62,4 +62,13 @@ static inline std::string to_string_binary(const int128_t& value) {
 
 } /* namespace nonstd */
 
+namespace utils {
+
+template <typename T>
+struct type_name {
+    static std::string name;
+};
+
+} /* namespace utils */
+
 #endif /* LIBEXPR_UTILS_HPP */

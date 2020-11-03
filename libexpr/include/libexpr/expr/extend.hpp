@@ -5,6 +5,7 @@
 
 #include "libexpr/context.hpp"
 #include "libexpr/expr/child/one.hpp"
+#include "libexpr/utils.hpp"
 
 namespace libexpr {
 
@@ -36,7 +37,7 @@ expr_ptr extend_expr<IsSigned, FromType>::deep_copy() const {
 
 template <bool IsSigned, typename FromType>
 std::string extend_expr<IsSigned, FromType>::get_name() const {
-    return std::string("extend-") + typeid(FromType).name();
+    return std::string("extend-") + utils::type_name<FromType>::name;
 }
 
 template <bool IsSigned, typename FromType>
