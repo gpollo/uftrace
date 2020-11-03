@@ -220,11 +220,12 @@ librecover_sources = [
     'librecover/source/utils.cpp',
 ]
 
-librecover = static_library(
+librecover = shared_library(
     'recover', librecover_sources,
     include_directories: [librecover_include],
     cpp_args: ['-std=c++17', '-Wall'],
     dependencies: [libexpr_dep, libcapstone_dep],
+    install: true,
 )
 
 librecover_dep = declare_dependency(
