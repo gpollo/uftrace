@@ -101,6 +101,8 @@ enum options {
 	OPT_signal,
 	OPT_srcline,
 	OPT_usage,
+	OPT_tracepoint_add,
+	OPT_tracepoint_remove,
 };
 
 __used static const char uftrace_usage[] =
@@ -108,7 +110,7 @@ __used static const char uftrace_usage[] =
 "\n"
 "Usage: uftrace [COMMAND] [OPTION...] [<program>]\n"
 "\n"
-" COMMAND: record|replay|live|report|graph|info|dump|recv|script|tui\n"
+" COMMAND: record|replay|live|report|graph|info|dump|recv|script|tui|client\n"
 "\n";
 
 __used static const char uftrace_help[] =
@@ -198,6 +200,8 @@ __used static const char uftrace_help[] =
 "      --task-newline         Interleave a newline when task is changed\n"
 "      --tid=TID[,TID,...]    Only replay those tasks\n"
 "      --time                 Print time information\n"
+"      --tp--add=function     Dynamically add a tracepoint\n"
+"      --tp--rm=function      Dynamically remove a tracepoint\n"
 "  -T, --trigger=FUNC@act[,act,...]\n"
 "                             Trigger action on those FUNCs\n"
 "  -U, --unpatch=FUNC         Don't apply dynamic patching for FUNCs\n"
@@ -299,6 +303,8 @@ static const struct option uftrace_options[] = {
 	NO_ARG(usage, OPT_usage),
 	NO_ARG(version, 'V'),
 	NO_ARG(estimate-return, 'e'),
+	REQ_ARG(tp-add, OPT_tracepoint_add),
+	REQ_ARG(tp-rm, OPT_tracepoint_remove),
 	{ 0 }
 };
 
@@ -962,6 +968,8 @@ static void update_subcmd(struct opts *opts, char *cmd)
 		opts->mode = UFTRACE_MODE_SCRIPT;
 	else if (!strcmp(cmd, "tui"))
 		opts->mode = UFTRACE_MODE_TUI;
+	else if (!strcmp(cmd, "client"))
+		opts->mode = UFTRACE_MODE_CLIENT;
 	else
 		opts->mode = UFTRACE_MODE_INVALID;
 }
@@ -1382,6 +1390,9 @@ int main(int argc, char *argv[])
 		break;
 	case UFTRACE_MODE_TUI:
 		ret = command_tui(argc, argv, &opts);
+		break;
+	case UFTRACE_MODE_CLIENT:
+		ret = command_client(argc, argv, &opts);
 		break;
 	case UFTRACE_MODE_INVALID:
 		ret = 1;

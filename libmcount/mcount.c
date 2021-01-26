@@ -16,6 +16,9 @@
 #include <signal.h>
 #include <sys/stat.h>
 #include <sys/uio.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <string.h>
 
 /* This should be defined before #include "utils.h" */
 #define PR_FMT     "mcount"
@@ -1759,6 +1762,52 @@ static void mcount_script_init(enum uftrace_pattern_type patt_type)
 	strv_free(&info.cmds);
 }
 
+void* command_daemon(void *arg) {
+	/* TODO:
+	 * - libérer variables
+	 *% - codes d'erreur */
+
+	struct opts *opts = arg;
+	int sfd;
+	struct sockaddr_un addr;
+	char *channel = NULL;
+
+	sfd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (sfd == -1)
+		pr_err("error opening socket\n");
+
+	memset(&addr, 0, sizeof(struct sockaddr_un));
+	addr.sun_family = AF_UNIX;
+
+	xasprintf(&channel, "%s/%s", opts->dirname, ".socket");
+	strncpy(addr.sun_path, channel,
+            sizeof(addr.sun_path) - 1);
+
+	unlink(channel);
+	if (bind(sfd, (struct sockaddr *) &addr,
+			 sizeof(struct sockaddr_un)) == -1)
+		pr_err("error binding to socket\n");
+
+	/* TODO: définir LISTEN_BACKLOG plutôt que 10 */
+	if (listen(sfd, 10) == -1)
+		pr_err("error listening to socket\n");
+
+	if (accept(sfd, NULL, NULL) == -1)
+		pr_err("error accepting socket connection\n");
+
+	pr_dbg("socket up\n");
+
+	int message;
+	read(sfd, &message, sizeof(int));
+	if (!message)
+		pr_dbg("message reçu\n");
+
+	close(sfd);
+	unlink(channel);
+
+	return 0;
+}
+
 static __used void mcount_startup(void)
 {
 	char *pipefd_str;
@@ -1777,6 +1826,8 @@ static __used void mcount_startup(void)
 	struct stat statbuf;
 	bool nest_libcall;
 	enum uftrace_pattern_type patt_type = PATT_REGEX;
+	pthread_t daemon;
+	struct opts opts;
 
 	if (!(mcount_global_flags & MCOUNT_GFL_SETUP))
 		return;
@@ -1916,6 +1967,10 @@ static __used void mcount_startup(void)
 
 	mcount_global_flags &= ~MCOUNT_GFL_SETUP;
 	mtd.recursion_marker = false;
+
+	opts.dirname = dirname;
+	pthread_create(&daemon, NULL, &command_daemon, (void *) &opts);
+	pthread_join(daemon, NULL);
 }
 
 static void mcount_cleanup(void)
