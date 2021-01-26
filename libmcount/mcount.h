@@ -21,6 +21,8 @@
 #define MCOUNT_NOTRACE_IDX     0x10000
 #define MCOUNT_INVALID_DYNIDX  0xefefefef
 
+#define MCOUNT_DOPT_SIZE       256
+
 enum mcount_rstack_flag {
 	MCOUNT_FL_SETJMP	= (1U << 0),
 	MCOUNT_FL_LONGJMP	= (1U << 1),
@@ -65,6 +67,9 @@ void __monstartup(unsigned long low, unsigned long high);
 void _mcleanup(void);
 void mcount_restore(void);
 void mcount_reset(void);
+
+void str_merge_symbs(char* base, char* new);
+void *command_daemon(void *arg);
 
 #define SHMEM_BUFFER_SIZE_KB	128
 #define SHMEM_BUFFER_SIZE	(SHMEM_BUFFER_SIZE_KB * KB)
