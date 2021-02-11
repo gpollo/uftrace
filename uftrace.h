@@ -392,6 +392,20 @@ enum uftrace_msg_type {
 	UFTRACE_MSG_SEND_END,
 };
 
+enum uftrace_dopt {
+    UFTRACE_DOPT_PATT_TYPE,
+    UFTRACE_DOPT_PATCH,
+	UFTRACE_DOPT_UNPATCH,
+	UFTRACE_DOPT_TRIGGER,
+	UFTRACE_DOPT_FILTER,
+	UFTRACE_DOPT_NOTRACE,
+	UFTRACE_DOPT_CALLER_FILTER,
+	UFTRACE_DOPT_ARGUMENT,
+	UFTRACE_DOPT_RETVAL,
+    UFTRACE_DOPT_CLOSE,			/* Close the connection with the client */
+	UFTRACE_DOPT_KILL,			/* Kill the daemon */
+};
+
 /* msg format for communicating by pipe */
 struct uftrace_msg {
 	unsigned short magic; /* UFTRACE_MSG_MAGIC */

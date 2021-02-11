@@ -1765,16 +1765,27 @@ static void mcount_script_init(enum uftrace_pattern_type patt_type)
 void* command_daemon(void *arg) {
 	/* TODO:
 	 * - libérer variables
-	 *% - codes d'erreur */
+	 * - codes d'erreur */
 
 	struct opts *opts = arg;
-	int sfd;
+	int sfd, cfd;
 	struct sockaddr_un addr;
+	char buf[MCOUNT_DOPT_SIZE];
 	char *channel = NULL;
+	enum uftrace_dopt opt;
+	bool close_connection, kill_daemon;
+	enum uftrace_pattern_type ptype = opts->patt_type;
+	struct uftrace_filter_setting filter_setting = {
+	.ptype		= ptype,
+	.auto_args	= false,
+	.allow_kernel	= false,
+	.lp64		= host_is_lp64(),
+	.arch		= host_cpu_arch()
+    };
 
 	sfd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (sfd == -1)
-		pr_err("error opening socket\n");
+		pr_err("error opening socket");
 
 	memset(&addr, 0, sizeof(struct sockaddr_un));
 	addr.sun_family = AF_UNIX;
@@ -1786,21 +1797,64 @@ void* command_daemon(void *arg) {
 	unlink(channel);
 	if (bind(sfd, (struct sockaddr *) &addr,
 			 sizeof(struct sockaddr_un)) == -1)
-		pr_err("error binding to socket\n");
+		pr_err("error binding to socket");
 
 	/* TODO: définir LISTEN_BACKLOG plutôt que 10 */
 	if (listen(sfd, 10) == -1)
-		pr_err("error listening to socket\n");
+		pr_err("error listening to socket");
 
-	if (accept(sfd, NULL, NULL) == -1)
-		pr_err("error accepting socket connection\n");
+	kill_daemon = false;
+	while (!kill_daemon) {
+		if ((cfd = accept(sfd, NULL, NULL)) == -1)
+			pr_err("error accepting socket connection");
 
-	pr_dbg("socket up\n");
+		close_connection = false;
+		while (!close_connection) {
+			if (read(cfd, &opt, sizeof(enum uftrace_dopt)) == -1)
+				pr_err("error reading options");
 
-	int message;
-	read(sfd, &message, sizeof(int));
-	if (!message)
-		pr_dbg("message reçu\n");
+			switch (opt) {
+				case UFTRACE_DOPT_PATT_TYPE:
+					if (read(cfd, &ptype,
+							 sizeof(enum uftrace_pattern_type)) == -1)
+						pr_err("error reading options");
+					break;
+				case UFTRACE_DOPT_PATCH:
+					break;
+				case UFTRACE_DOPT_UNPATCH:
+					break;
+				case UFTRACE_DOPT_FILTER: /* -F */
+					if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
+						pr_err("error reading options");
+
+					filter_setting.ptype = ptype;
+
+					uftrace_setup_filter(buf,
+										 &symtabs,
+										 &mcount_triggers,
+										 &mcount_filter_mode,
+										 &filter_setting);
+					break;
+				case UFTRACE_DOPT_NOTRACE: /* -N */
+					break;
+				case UFTRACE_DOPT_CALLER_FILTER:
+					break;
+				case UFTRACE_DOPT_ARGUMENT:
+					break;
+				case UFTRACE_DOPT_RETVAL:
+					break;
+				case UFTRACE_DOPT_KILL:
+					kill_daemon = true;
+					__attribute__((fallthrough)); /* FALLTHROUGH */
+				case UFTRACE_DOPT_CLOSE:
+					close_connection = true;
+					break;
+				default:
+					pr_err("option not recognized");
+			}
+		}
+		close(cfd);
+	}
 
 	close(sfd);
 	unlink(channel);
