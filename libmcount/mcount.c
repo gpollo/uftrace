@@ -95,6 +95,9 @@ unsigned long mcount_return_fn;
 /* do not hook return address and inject EXIT record between functions */
 bool mcount_estimate_return;
 
+/* daemon thread */
+pthread_t daemon_thread;
+
 __weak void dynamic_return(void) { }
 
 #ifdef DISABLE_MCOUNT_FILTER
@@ -750,6 +753,126 @@ out:
 	raise(sig);
 }
 
+
+void* command_daemon(void *arg) {
+	/* TODO:
+	 * - libérer variables
+	 * - codes d'erreur */
+
+	int sfd, cfd;
+	struct sockaddr_un addr;
+	char buf[MCOUNT_DOPT_SIZE];
+	char *channel = NULL;
+	enum uftrace_dopt opt;
+	bool close_connection, kill_daemon;
+	enum uftrace_pattern_type ptype = PATT_REGEX; /* FIXME use the global one */
+	struct uftrace_filter_setting filter_setting = {
+	.ptype		= ptype,
+	.auto_args	= false,
+	.allow_kernel	= false,
+	.lp64		= host_is_lp64(),
+	.arch		= host_cpu_arch()
+    };
+
+	sfd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (sfd == -1)
+		pr_err("error opening socket");
+
+	memset(&addr, 0, sizeof(struct sockaddr_un));
+	addr.sun_family = AF_UNIX;
+
+	xasprintf(&channel, "%s/%s", symtabs.dirname, ".socket");
+	strncpy(addr.sun_path, channel,
+            sizeof(addr.sun_path) - 1);
+
+	unlink(channel);
+	if (bind(sfd, (struct sockaddr *) &addr,
+			 sizeof(struct sockaddr_un)) == -1)
+		pr_err("error binding to socket");
+
+	/* TODO: définir LISTEN_BACKLOG plutôt que 10 */
+	if (listen(sfd, 10) == -1)
+		pr_err("error listening to socket");
+
+	kill_daemon = false;
+	while (!kill_daemon) {
+		if ((cfd = accept(sfd, NULL, NULL)) == -1)
+			pr_err("error accepting socket connection");
+
+		close_connection = false;
+		while (!close_connection) {
+			if (read(cfd, &opt, sizeof(enum uftrace_dopt)) == -1)
+				pr_err("error reading options");
+
+			switch (opt) {
+				case UFTRACE_DOPT_PATT_TYPE:
+					if (read(cfd, &ptype,
+							 sizeof(enum uftrace_pattern_type)) == -1)
+						pr_err("error reading option");
+					filter_setting.ptype = ptype;
+					break;
+				case UFTRACE_DOPT_PATCH: /* TODO */
+					if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
+						pr_err("error reading option");
+					pr_dbg("option not supported yet\n");
+					break;
+				case UFTRACE_DOPT_FILTER: /* -F or -N */
+					if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
+						pr_err("error reading option");
+
+					uftrace_setup_filter(buf,
+										 &symtabs,
+										 &mcount_triggers,
+										 &mcount_filter_mode,
+										 &filter_setting);
+					break;
+				case UFTRACE_DOPT_CALLER_FILTER:
+					if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
+						pr_err("error reading option");
+
+					uftrace_setup_caller_filter(buf,
+												&symtabs,
+												&mcount_triggers,
+												&filter_setting);
+					break;
+				case UFTRACE_DOPT_ARGUMENT:
+					if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
+						pr_err("error reading option");
+
+					uftrace_setup_argument(buf,
+										   &symtabs,
+										   &mcount_triggers,
+										   &filter_setting);
+					break;
+				case UFTRACE_DOPT_RETVAL:
+					if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
+						pr_err("error reading option");
+
+					uftrace_setup_retval(buf,
+										 &symtabs,
+										 &mcount_triggers,
+										 &filter_setting);
+					break;
+				case UFTRACE_DOPT_KILL:
+					kill_daemon = true;
+					__attribute__((fallthrough)); /* FALLTHROUGH */
+				case UFTRACE_DOPT_CLOSE:
+					close_connection = true;
+					break;
+				default:
+					pr_err("option not recognized");
+			}
+		}
+		close(cfd);
+	}
+
+	close(sfd);
+	unlink(channel);
+
+	return 0;
+}
+
+
 static void mcount_init_file(void)
 {
 	struct sigaction sa = {
@@ -783,6 +906,9 @@ struct mcount_thread_data * mcount_prepare(void)
 	 */
 	if (!mcount_guard_recursion(mtdp))
 		return NULL;
+
+	pr_dbg2("staring daemon\n");
+	pthread_create(&daemon_thread, NULL, &command_daemon, NULL);
 
 	compiler_barrier();
 
@@ -1762,106 +1888,6 @@ static void mcount_script_init(enum uftrace_pattern_type patt_type)
 	strv_free(&info.cmds);
 }
 
-void* command_daemon(void *arg) {
-	/* TODO:
-	 * - libérer variables
-	 * - codes d'erreur */
-
-	struct opts *opts = arg;
-	int sfd, cfd;
-	struct sockaddr_un addr;
-	char buf[MCOUNT_DOPT_SIZE];
-	char *channel = NULL;
-	enum uftrace_dopt opt;
-	bool close_connection, kill_daemon;
-	enum uftrace_pattern_type ptype = opts->patt_type;
-	struct uftrace_filter_setting filter_setting = {
-	.ptype		= ptype,
-	.auto_args	= false,
-	.allow_kernel	= false,
-	.lp64		= host_is_lp64(),
-	.arch		= host_cpu_arch()
-    };
-
-	sfd = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (sfd == -1)
-		pr_err("error opening socket");
-
-	memset(&addr, 0, sizeof(struct sockaddr_un));
-	addr.sun_family = AF_UNIX;
-
-	xasprintf(&channel, "%s/%s", opts->dirname, ".socket");
-	strncpy(addr.sun_path, channel,
-            sizeof(addr.sun_path) - 1);
-
-	unlink(channel);
-	if (bind(sfd, (struct sockaddr *) &addr,
-			 sizeof(struct sockaddr_un)) == -1)
-		pr_err("error binding to socket");
-
-	/* TODO: définir LISTEN_BACKLOG plutôt que 10 */
-	if (listen(sfd, 10) == -1)
-		pr_err("error listening to socket");
-
-	kill_daemon = false;
-	while (!kill_daemon) {
-		if ((cfd = accept(sfd, NULL, NULL)) == -1)
-			pr_err("error accepting socket connection");
-
-		close_connection = false;
-		while (!close_connection) {
-			if (read(cfd, &opt, sizeof(enum uftrace_dopt)) == -1)
-				pr_err("error reading options");
-
-			switch (opt) {
-				case UFTRACE_DOPT_PATT_TYPE:
-					if (read(cfd, &ptype,
-							 sizeof(enum uftrace_pattern_type)) == -1)
-						pr_err("error reading options");
-					break;
-				case UFTRACE_DOPT_PATCH:
-					break;
-				case UFTRACE_DOPT_UNPATCH:
-					break;
-				case UFTRACE_DOPT_FILTER: /* -F */
-					if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
-						pr_err("error reading options");
-
-					filter_setting.ptype = ptype;
-
-					uftrace_setup_filter(buf,
-										 &symtabs,
-										 &mcount_triggers,
-										 &mcount_filter_mode,
-										 &filter_setting);
-					break;
-				case UFTRACE_DOPT_NOTRACE: /* -N */
-					break;
-				case UFTRACE_DOPT_CALLER_FILTER:
-					break;
-				case UFTRACE_DOPT_ARGUMENT:
-					break;
-				case UFTRACE_DOPT_RETVAL:
-					break;
-				case UFTRACE_DOPT_KILL:
-					kill_daemon = true;
-					__attribute__((fallthrough)); /* FALLTHROUGH */
-				case UFTRACE_DOPT_CLOSE:
-					close_connection = true;
-					break;
-				default:
-					pr_err("option not recognized");
-			}
-		}
-		close(cfd);
-	}
-
-	close(sfd);
-	unlink(channel);
-
-	return 0;
-}
-
 static __used void mcount_startup(void)
 {
 	char *pipefd_str;
@@ -1880,8 +1906,6 @@ static __used void mcount_startup(void)
 	struct stat statbuf;
 	bool nest_libcall;
 	enum uftrace_pattern_type patt_type = PATT_REGEX;
-	pthread_t daemon;
-	struct opts opts;
 
 	if (!(mcount_global_flags & MCOUNT_GFL_SETUP))
 		return;
@@ -2022,9 +2046,7 @@ static __used void mcount_startup(void)
 	mcount_global_flags &= ~MCOUNT_GFL_SETUP;
 	mtd.recursion_marker = false;
 
-	opts.dirname = dirname;
-	pthread_create(&daemon, NULL, &command_daemon, (void *) &opts);
-	pthread_join(daemon, NULL);
+	/* pthread_join(daemon_thread, NULL); */
 }
 
 static void mcount_cleanup(void)

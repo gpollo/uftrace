@@ -12,11 +12,17 @@
 #include "libmcount/mcount.h"
 #include "utils/utils.h"
 
+/* Socket file descriptor, to communicate with the daemon */
+int sfd;
+
+void send_option(enum uftrace_dopt opt) {
+    if (write(sfd, &opt, sizeof(enum uftrace_dopt)) == -1)
+            pr_err("error sending option type");
+}
+
 int command_client(int argc, char *argv[], struct opts *opts) {
-    int sfd;
     struct sockaddr_un addr;
     char *channel = NULL;
-    enum uftrace_dopt opt;
     char command[MCOUNT_DOPT_SIZE];
 
     sfd = socket(AF_UNIX, SOCK_STREAM, 0);
@@ -34,23 +40,29 @@ int command_client(int argc, char *argv[], struct opts *opts) {
                 sizeof(struct sockaddr_un)) == -1)
         pr_err("error connecting to socket");
 
-    /* if (opts->patt_type) { */
-    /*     opt = UFTRACE_DOPT_PATT_TYPE; */
-    /*     if (write(sfd, &opt, sizeof(enum uftrace_dopt)) == -1) */
-    /*         pr_err("error sending option type"); */
+    if (opts->patt_type) {
+        send_option(UFTRACE_DOPT_PATT_TYPE);
 
-    /*     if (write(sfd, &opts->patt_type, */
-    /*               sizeof(enum uftrace_pattern_type)) == -1) */
-    /*         pr_err("error sending options"); */
-    /* } */
+        if (write(sfd, &opts->patt_type,
+                  sizeof(enum uftrace_pattern_type)) == -1)
+            pr_err("error sending options");
+    }
+
+    if (opts->patch) {
+        send_option(UFTRACE_DOPT_PATCH);
+        pr_dbg3("changing patch options\n");
+
+        strcpy(command, opts->patch);
+        if (write(sfd, &command, MCOUNT_DOPT_SIZE) == -1)
+            pr_err("error sending options");
+    }
 
     if (opts->filter) {
         char *filter_str = uftrace_clear_kernel(opts->filter);
 
+        pr_dbg3("changing filter options\n");
         if (filter_str) {
-            opt = UFTRACE_DOPT_FILTER;
-            if (write(sfd, &opt, sizeof(enum uftrace_dopt)) == -1)
-                pr_err("error sending option type");
+            send_option(UFTRACE_DOPT_FILTER);
 
             if (write(sfd, filter_str, MCOUNT_DOPT_SIZE) == -1)
                 pr_err("error sending options");
@@ -59,25 +71,35 @@ int command_client(int argc, char *argv[], struct opts *opts) {
         }
     }
 
-    /* if (opts->patch) { */
-    /*     enum uftrace_dopt opt = UFTRACE_DOPT_PATCH; */
-    /*     if (write(sfd, &opt, sizeof(enum uftrace_dopt)) == -1) */
-    /*         pr_err("error sending options"); */
+    if (opts->caller) {
+        pr_dbg3("changing caller filter options\n");
+        send_option(UFTRACE_DOPT_CALLER_FILTER);
 
-    /*     strcpy(command, opts->patch); */
-    /*     if (write(sfd, &command, MCOUNT_DOPT_SIZE) == -1) */
-    /*         pr_err("error sending options"); */
-    /* } */
+        strcpy(command, opts->caller);
+        if (write(sfd, &command, MCOUNT_DOPT_SIZE) == -1)
+            pr_err("error sending options");
+    }
 
-    /* opt = UFTRACE_DOPT_CLOSE; */
-    /* if (write(sfd, &opt, sizeof(enum uftrace_dopt)) == -1) */
-    /*     pr_err("error sending options"); */
+    if (opts->args) {
+        pr_dbg3("changing argument options\n");
+        send_option(UFTRACE_DOPT_ARGUMENT);
 
-    /* HACK artificial killing of the daemon */
-    opt = UFTRACE_DOPT_KILL;
-    if (write(sfd, &opt, sizeof(enum uftrace_dopt)) == -1)
-        pr_err("error sending options");
+        strcpy(command, opts->args);
+        if (write(sfd, &command, MCOUNT_DOPT_SIZE) == -1)
+            pr_err("error sending options");
+    }
 
+    if (opts->retval) {
+        pr_dbg3("changing retval options\n");
+        send_option(UFTRACE_DOPT_RETVAL);
+
+        strcpy(command, opts->retval);
+        if (write(sfd, &command, MCOUNT_DOPT_SIZE) == -1)
+            pr_err("error sending options");
+    }
+
+    /* send_option(UFTRACE_DOPT_KILL);    /\* HACK artificial killing of the daemon *\/ */
+    send_option(UFTRACE_DOPT_CLOSE);
     close(sfd);
 
     return 0;
