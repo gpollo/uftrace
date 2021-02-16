@@ -219,7 +219,7 @@ if get_option('with-perf').auto()
     else
         message('Disabling perf event support')
     endif
-elif get_option('with-libstdcxx').enabled()
+elif get_option('with-perf').enabled()
     if have_perf_clockid_result.returncode() == 0
         perf_clockid_is_enabled = true
         common_cflags += '-DHAVE_PERF_CLOCKID'
