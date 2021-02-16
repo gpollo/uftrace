@@ -15,9 +15,9 @@ option(
 )
 
 option(
-    'without-doc',
+    'with-doc',
     type : 'feature',
-    value : 'disabled',
+    value : 'auto',
     description: 'Don\'t generate man page',
 )
 

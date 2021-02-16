@@ -741,9 +741,8 @@ doc_sources = [
     'uftrace',
 ]
 
-if get_option('without-doc').disabled()
-    program_pandoc = find_program('pandoc', required: true)
-
+program_pandoc = find_program('pandoc', required: get_option('with-doc'))
+if program_pandoc.found()
     foreach source_file : doc_sources
         if get_option('doc-lang') == 'en'
             markdown_file = files('doc/@0@.md'.format(source_file))
