@@ -344,8 +344,6 @@ endif
 # libmcount #
 #############
 
-libmcount_include = include_directories('libmcount')
-
 libmcount_nop_sources = [
     'libmcount/mcount-nop.c',
 ]
@@ -386,13 +384,13 @@ libmcount_base_deps = [
     libluajit_dep,
     libncurses_dep,
     libpthread_dep,
-    libpython3_dep,
+    libpython_dep,
     librt_dep,
 ]
 
 libmcount = shared_library(
     'mcount', [libmcount_arch_sources, libmcount_arch_asm_sources, libmcount_sources, version_h],
-    include_directories: [libmcount_arch_include, libmcount_include],
+    include_directories: [libmcount_arch_include],
     dependencies: [libmcount_base_deps],
     c_args: [common_cflags, libmcount_cflags],
     link_args: [common_ldflags],
@@ -401,7 +399,7 @@ libmcount = shared_library(
 
 libmcount_fast = shared_library(
     'mcount-fast', [libmcount_arch_sources, libmcount_arch_asm_sources, libmcount_sources, version_h],
-    include_directories: [libmcount_arch_include, libmcount_include],
+    include_directories: [libmcount_arch_include],
     dependencies: [libmcount_base_deps],
     c_args: [common_cflags, libmcount_cflags, '-DDISABLE_MCOUNT_FILTER'],
     link_args: [common_ldflags],
@@ -410,7 +408,7 @@ libmcount_fast = shared_library(
 
 libmcount_single = shared_library(
     'mcount-single', [libmcount_arch_sources, libmcount_arch_asm_sources, libmcount_sources, version_h],
-    include_directories: [libmcount_arch_include, libmcount_include],
+    include_directories: [libmcount_arch_include],
     dependencies: [libmcount_base_deps],
     c_args: [common_cflags, libmcount_cflags, '-DSINGLE_THREAD'],
     link_args: [common_ldflags],
@@ -419,7 +417,7 @@ libmcount_single = shared_library(
 
 libmcount_fast_single = shared_library(
     'mcount-fast-single', [libmcount_arch_sources, libmcount_arch_asm_sources, libmcount_sources, version_h],
-    include_directories: [libmcount_arch_include, libmcount_include],
+    include_directories: [libmcount_arch_include],
     dependencies: [libmcount_base_deps],
     c_args: [common_cflags, libmcount_cflags, '-DDISABLE_MCOUNT_FILTER', '-DSINGLE_THREAD'],
     link_args: [common_ldflags],
@@ -428,7 +426,7 @@ libmcount_fast_single = shared_library(
 
 libmcount_fast_nop = shared_library(
     'mcount-nop', [libmcount_nop_sources, version_h],
-    include_directories: [libmcount_include],
+    include_directories: [],
     dependencies: [libmcount_base_deps],
     c_args: [common_cflags, libmcount_cflags, '-DDISABLE_MCOUNT_FILTER', '-DSINGLE_THREAD'],
     link_args: [common_ldflags],
@@ -697,7 +695,7 @@ tests_unittest_h = tests_dir + '/unittest.h'
 
 unittests = executable(
     'unittests', [unittests_sources],
-    include_directories: [unittests_includes, libmcount_arch_include, libmcount_include],
+    include_directories: [unittests_includes, libmcount_arch_include],
     dependencies: [unittests_deps],
     c_args: [common_cflags, test_cflags,  '-DUNIT_TEST', '-include', tests_unittest_h],
     link_args: [common_ldflags],
