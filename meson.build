@@ -150,14 +150,27 @@ endif
 # -Dwith-libpython build option #
 #################################
 
-libpython3_is_enabled = false
-libpython3_dep = []
-python3_installation = python_module.find_installation('python3', required: get_option('with-libpython'))
+libpython_is_enabled = false
+libpython_dep = []
+python2_installation = python_module.find_installation('python2', required: false)
+python3_installation = python_module.find_installation('python3', required: false)
 if python3_installation.found()
-    libpython3_dep = python3_installation.dependency()
-    if libpython3_dep.found()
-        libpython3_is_enabled = true
+    libpython_dep = python3_installation.dependency()
+    if libpython_dep.found()
+        libpython_is_enabled = true
         common_cflags += '-DHAVE_LIBPYTHON3'
+    endif
+elif python2_installation.found()
+    libpython_dep = python2_installation.dependency()
+    if libpython_dep.found()
+        libpython_is_enabled = true
+        common_cflags += '-DHAVE_LIBPYTHON2'
+    endif
+endif
+
+if get_option('with-libpython').enabled()
+    if not libpython_is_enabled
+        error('Failed to find a valid python installation')
     endif
 endif
 
@@ -507,7 +520,7 @@ uftrace_deps = [
     libluajit_dep,
     libncurses_dep,
     libpthread_dep,
-    libpython3_dep,
+    libpython_dep,
     librt_dep,
     libtraceevent_dep,
 ]
@@ -673,7 +686,7 @@ unittests_deps = [
     libluajit_dep,
     libncurses_dep,
     libpthread_dep,
-    libpython3_dep,
+    libpython_dep,
     librt_dep,
     libtraceevent_dep,
 ]
@@ -782,7 +795,7 @@ libcapstone_is_enabled  = (libcapstone_is_enabled)  ? text_on : text_off
 libdw_is_enabled        = (libdw_is_enabled)        ? text_on : text_off
 libelf_is_enabled       = (libelf_is_enabled)       ? text_on : text_off
 libluajit_is_enabled    = (libluajit_is_enabled)    ? text_on : text_off
-libpython3_is_enabled   = (libpython3_is_enabled)   ? text_on : text_off
+libpython_is_enabled    = (libpython_is_enabled)    ? text_on : text_off
 libncurses_is_enabled   = (libncurses_is_enabled)   ? text_on : text_off
 cxa_demangle_is_enabled = (cxa_demangle_is_enabled) ? text_on : text_off
 perf_clockid_is_enabled = (perf_clockid_is_enabled) ? text_on : text_off
@@ -793,7 +806,7 @@ message('     libcapstone: [ @0@ ] - full dynamic tracing support'.format(libcap
 message('           libdw: [ @0@ ] - dwarf support'.format(libdw_is_enabled))
 message('          libelf: [ @0@ ] - more flexible ELF data handling'.format(libelf_is_enabled))
 message('       libluajit: [ @0@ ] - luajit scripting support'.format(libluajit_is_enabled))
-message('       libpython: [ @0@ ] - python scripting support'.format(libpython3_is_enabled))
+message('       libpython: [ @0@ ] - python scripting support'.format(libpython_is_enabled))
 message('      libncurses: [ @0@ ] - terminal UI support'.format(libncurses_is_enabled))
 message('    cxa_demangle: [ @0@ ] - full demangler support with libstdc++'.format(cxa_demangle_is_enabled))
 message('      perf event: [ @0@ ] - perf event support'.format(perf_clockid_is_enabled))
