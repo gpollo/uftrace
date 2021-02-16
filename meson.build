@@ -7,7 +7,7 @@ common_cflags = ['-D_GNU_SOURCE', '-D_DEFAULT_SOURCE', '-D_XOPEN_SOURCE=600']
 common_cflags += '-fvisibility=hidden'
 common_cflags += '-fno-omit-frame-pointer'
 common_ldflags = []
-uftrace_cflags    = []
+uftrace_cflags    = ['-DINSTALL_LIB_PATH="@0@"'.format(get_option('prefix') / get_option('libdir'))]
 libmcount_cflags  = []
 demangler_cflags  = []
 symbols_cflags    = []
