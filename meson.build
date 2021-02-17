@@ -99,29 +99,31 @@ if libcapstone_dep.found()
     common_cflags += '-DHAVE_LIBCAPSTONE'
 endif
 
-#############################
-# -Dwith-libdw build option #
-#############################
+##############################
+# -Dwith-libdw  build option #
+# -Dwith-libelf build option #
+##############################
 
 libdw_is_enabled = false
 libdw_dep = []
-if not get_option('with-libelf').disabled()
-    libdw_dep = cc.find_library('dw', required: get_option('with-libdw'))
+
+libelf_is_enabled = false
+libelf_dep = cc.find_library('elf',
+    required: get_option('with-libelf'),
+    has_headers: ['gelf.h', 'libelf.h'],
+)
+if libelf_dep.found()
+    libelf_is_enabled = true
+    common_cflags += '-DHAVE_LIBELF'
+
+    libdw_dep = cc.find_library('dw',
+        required: get_option('with-libdw'),
+        has_headers: ['elfutils/libdw.h'],
+    )
     if libdw_dep.found()
         libdw_is_enabled = true
         common_cflags += '-DHAVE_LIBDW'
     endif
-endif
-
-##############################
-# -Dwith-libelf build option #
-##############################
-
-libelf_is_enabled = false
-libelf_dep = cc.find_library('elf', required: get_option('with-libelf'))
-if libelf_dep.found()
-    libelf_is_enabled = true
-    common_cflags += '-DHAVE_LIBELF'
 endif
 
 #################################
