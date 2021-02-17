@@ -20,13 +20,18 @@ program_git = find_program('git', required: true)
 
 cc = meson.get_compiler('c')
 
+host_machine_cpu_family = host_machine.cpu_family()
+if host_machine_cpu_family == 'x86'
+    host_machine_cpu_family = 'i386'
+endif
+
 if get_option('arch') == 'auto'
-    arch = host_machine.cpu_family()
-elif get_option('arch') == host_machine.cpu_family()
-    arch = host_machine.cpu_family()
+    arch = host_machine_cpu_family
+elif get_option('arch') == host_machine_cpu_family
+    arch = host_machine_cpu_family
 else
     error('host compiler `@0@` doesn\'t match host architecture `@1@`'.format(
-        host_machine.cpu_family(), get_option('arch')))
+        host_machine_cpu_family, get_option('arch')))
 endif
 
 ################################
