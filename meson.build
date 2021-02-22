@@ -525,7 +525,7 @@ uftrace_deps = [
 ]
 
 uftrace = executable(
-    'uftrace', [uftrace_sources],
+    'uftrace', [uftrace_sources, version_h],
     include_directories: [uftrace_include],
     dependencies: [uftrace_deps],
     c_args: [common_cflags, uftrace_cflags],
