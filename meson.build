@@ -113,18 +113,12 @@ libdw_is_enabled = false
 libdw_dep = []
 
 libelf_is_enabled = false
-libelf_dep = cc.find_library('elf',
-    required: get_option('with-libelf'),
-    has_headers: ['gelf.h', 'libelf.h'],
-)
+libelf_dep = dependency('libelf', required: get_option('with-libelf'))
 if libelf_dep.found()
     libelf_is_enabled = true
     common_cflags += '-DHAVE_LIBELF'
 
-    libdw_dep = cc.find_library('dw',
-        required: get_option('with-libdw'),
-        has_headers: ['elfutils/libdw.h'],
-    )
+    libdw_dep = dependency('libdw', required: get_option('with-libdw'))
     if libdw_dep.found()
         libdw_is_enabled = true
         common_cflags += '-DHAVE_LIBDW'
