@@ -29,6 +29,7 @@
 #include "utils/rbtree.h"
 #include "utils/list.h"
 #include "utils/hashmap.h"
+#include "utils/membarrier.h"
 
 static struct mcount_dynamic_info *mdinfo;
 static struct mcount_dynamic_stats {
@@ -50,10 +51,12 @@ struct code_page {
 };
 
 static Hashmap* patched_syms = NULL;
+
 static Hashmap* unpatched_syms = NULL;
 
 static LIST_HEAD(code_pages);
 
+/* contains out-of-line execution code (return address -> modified instructions ptr) */
 static struct Hashmap *code_hmap;
 
 /* minimum function size for dynamic update */
@@ -176,7 +179,6 @@ void mcount_freeze_code(void)
 void *mcount_find_code(unsigned long addr)
 {
 	struct mcount_orig_insn *orig;
-
 	orig = lookup_code(code_hmap, addr);
 	if (orig == NULL)
 		return NULL;
@@ -367,6 +369,7 @@ static void load_modules_dynamic_info(struct symtabs *symtabs, bool needs_module
 
 struct mcount_dynamic_info *setup_trampoline(struct uftrace_mmap *map)
 {
+	static bool has_been_init = false;
 	struct mcount_dynamic_info *mdi;
 
 	for (mdi = mdinfo; mdi != NULL; mdi = mdi->next) {
@@ -375,10 +378,14 @@ struct mcount_dynamic_info *setup_trampoline(struct uftrace_mmap *map)
 	}
 
 	if (mdi != NULL && mdi->trampoline == 0) {
-		if (mcount_setup_trampoline(mdi) < 0)
-			mdi = NULL;
+		if (!has_been_init) {
+			if (mcount_setup_trampoline(mdi) < 0) {
+				mdi = NULL;
+			}
+		}
 	}
 
+	has_been_init = true;
 	return mdi;
 }
 
@@ -507,6 +514,10 @@ static void patch_func_matched(struct mcount_dynamic_info *mdi,
 		"__libc_csu_fini",
 	};
 
+	if (patched_syms == NULL) {
+		patched_syms = hashmap_create(10, hashmap_ptr_hash, hashmap_ptr_equals);
+	}
+
 	symtab = &map->mod->symtab;
 
 	for (i = 0; i < symtab->nr_sym; i++) {
@@ -605,13 +616,13 @@ static void freeze_dynamic_update(void)
 		tmp = mdi->next;
 
 		mcount_arch_dynamic_recover(mdi, &disasm);
-		mcount_cleanup_trampoline(mdi);
-		free(mdi);
+		// mcount_cleanup_trampoline(mdi);
+		// free(mdi);
 
 		mdi = tmp;
 	}
 
-	mcount_freeze_code();
+	// mcount_freeze_code();
 }
 
 /* do not use floating-point in libmcount */
@@ -623,12 +634,21 @@ static int calc_percent(int n, int total, int *rem)
 	return quot;
 }
 
+__weak int mcount_dynamic_init_arch(void) {
+	return 0;
+}
+
 int mcount_dynamic_init(struct symtabs *symtabs)
 {
 	char *size_filter;
 	int hash_size;
 
 	mcount_disasm_init(&disasm);
+
+	if (mcount_dynamic_init_arch() < 0) {
+		pr_dbg("mcount_dynamic_init: failed to execute arch initialization\n");
+		return -1;
+	}
 
 	hash_size = symtabs->exec_map->mod->symtab.nr_sym * 3 / 4;
 	code_hmap = hashmap_create(hash_size, hashmap_ptr_hash, hashmap_ptr_equals);
@@ -649,6 +669,11 @@ int mcount_dynamic_init(struct symtabs *symtabs)
 	size_filter = getenv("UFTRACE_PATCH_SIZE");
 	if (size_filter != NULL) {
 		min_size = strtoul(size_filter, NULL, 0);
+	}
+
+	if (membarrier(MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_SYNC_CORE, 0, 0) < 0) {
+		pr_err("failed to register intent to use MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE\n");
+		return -1;
 	}
 
 	return 0;
