@@ -398,8 +398,6 @@ static void mcount_filter_init(enum uftrace_pattern_type ptype, char *dirname,
 	};
 	bool needs_debug_info = false;
 
-	load_module_symtabs(&symtabs);
-
 	mcount_signal_init(getenv("UFTRACE_SIGNAL"), &filter_setting);
 
 	/* setup auto-args only if argument/return value is used */
@@ -841,8 +839,12 @@ void *command_daemon(void *arg) {
 
 	kill_daemon = false;
 	while (!kill_daemon) {
-		if ((cfd = accept(sfd, NULL, NULL)) == -1)
+		if ((cfd = accept(sfd, NULL, NULL)) == -1) {
+			if (errno == EINTR) {
+				continue;
+			}
 			pr_err("error accepting socket connection");
+		}
 
 		close_connection = false;
 		while (!close_connection) {
@@ -873,10 +875,15 @@ void *command_daemon(void *arg) {
 					pr_err("error reading option");
 				break;
 
-			case UFTRACE_DOPT_PATCH: /* TODO */
+			case UFTRACE_DOPT_PATCH:
 				if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
 					pr_err("error reading option");
-				pr_warn("unsupported option: patch\n");
+				pr_dbg("received patch: %s\n", buf);
+				if (mcount_dynamic_update(&symtabs, buf, PATT_SIMPLE) < 0) {
+					pr_dbg("mcount_dynamic_update failed\n");
+				} else {
+					pr_dbg("mcount_dynamic_update success\n");
+				}
 				break;
 
 			case UFTRACE_DOPT_FILTER: /* -F or -N */
@@ -2124,6 +2131,7 @@ static __used void mcount_startup(void)
 	symtabs.filename = mcount_exename;
 
 	record_proc_maps(dirname, mcount_session_name(), &symtabs);
+	load_module_symtabs(&symtabs);
 
 	if (pattern_str)
 		patt_type = parse_filter_pattern(pattern_str);
@@ -2142,6 +2150,7 @@ static __used void mcount_startup(void)
 	if (threshold_str)
 		mcount_threshold = strtoull(threshold_str, NULL, 0);
 
+	mcount_dynamic_init(&symtabs);
 	if (patch_str)
 		mcount_dynamic_update(&symtabs, patch_str, patt_type);
 

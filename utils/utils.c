@@ -1,3 +1,4 @@
+#include <asm-generic/errno.h>
 #include <stdio.h>
 #include <dirent.h>
 #include <stdbool.h>
@@ -9,6 +10,7 @@
 #include <libgen.h>
 
 #include "uftrace.h"
+#include "utils/list.h"
 #include "utils/utils.h"
 #include "utils/kernel.h"
 #include "libtraceevent/event-parse.h"
