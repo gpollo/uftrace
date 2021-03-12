@@ -103,6 +103,8 @@ enum options {
 	OPT_usage,
 	OPT_tracepoint_add,
 	OPT_tracepoint_remove,
+	OPT_pid,
+	OPT_kill,
 };
 
 __used static const char uftrace_usage[] =
@@ -155,6 +157,7 @@ __used static const char uftrace_help[] =
 "      --kernel-only          Dump kernel data only\n"
 "      --kernel-skip-out      Skip kernel functions outside of user (deprecated)\n"
 "  -K, --kernel-depth=DEPTH   Trace kernel functions within DEPTH\n"
+"      --kill                 Kill the daemon\n"
 "      --libmcount-single     Use single thread version of libmcount\n"
 "      --list-event           List available events\n"
 "      --logfile=FILE         Save log messages to this file\n"
@@ -179,6 +182,7 @@ __used static const char uftrace_help[] =
 "      --port=PORT            Use PORT for network connection (default: "
 	stringify(UFTRACE_RECV_PORT) ")\n"
 "  -P, --patch=FUNC           Apply dynamic patching for FUNCs\n"
+"      --pid=PID              PID of the daemon\n"
 "      --record               Record a new trace data before running command\n"
 "      --report               Show live report\n"
 "      --rt-prio=PRIO         Record with real-time (FIFO) priority\n"
@@ -200,8 +204,6 @@ __used static const char uftrace_help[] =
 "      --task-newline         Interleave a newline when task is changed\n"
 "      --tid=TID[,TID,...]    Only replay those tasks\n"
 "      --time                 Print time information\n"
-"      --tp-add=FUNC          Dynamically add a tracepoint\n"
-"      --tp-rm=FUNC           Dynamically remove a tracepoint\n"
 "  -T, --trigger=FUNC@act[,act,...]\n"
 "                             Trigger action on those FUNCs\n"
 "  -U, --unpatch=FUNC         Don't apply dynamic patching for FUNCs\n"
@@ -303,8 +305,9 @@ static const struct option uftrace_options[] = {
 	NO_ARG(usage, OPT_usage),
 	NO_ARG(version, 'V'),
 	NO_ARG(estimate-return, 'e'),
-	REQ_ARG(tp-add, OPT_tracepoint_add),
-	REQ_ARG(tp-rm, OPT_tracepoint_remove),
+	REQ_ARG(pid, OPT_pid),
+	NO_ARG(kill, OPT_kill),
+
 	{ 0 }
 };
 
@@ -938,6 +941,14 @@ static int parse_option(struct opts *opts, int key, char *arg)
 
 	case OPT_srcline:
 		opts->srcline = true;
+		break;
+
+	case OPT_pid:
+		opts->pid = atoi(arg);
+		break;
+
+	case OPT_kill:
+		opts->kill = true;
 		break;
 
 	default:

@@ -238,6 +238,7 @@ struct opts {
 	int nr_thread;
 	int rt_prio;
 	int size_filter;
+	int pid;
 	unsigned long bufsize;
 	unsigned long kernel_bufsize;
 	uint64_t threshold;
@@ -278,6 +279,7 @@ struct opts {
 	bool graphviz;
 	bool srcline;
 	bool estimate_return;
+	bool kill;
 	struct uftrace_time_range range;
 	enum uftrace_pattern_type patt_type;
 };
@@ -393,13 +395,16 @@ enum uftrace_msg_type {
 };
 
 enum uftrace_dopt {
+    UFTRACE_DOPT_DISABLED,
     UFTRACE_DOPT_PATT_TYPE,
     UFTRACE_DOPT_PATCH,
+	UFTRACE_DOPT_DEPTH,
 	UFTRACE_DOPT_TRIGGER,
 	UFTRACE_DOPT_FILTER,
 	UFTRACE_DOPT_CALLER_FILTER,
 	UFTRACE_DOPT_ARGUMENT,
 	UFTRACE_DOPT_RETVAL,
+	UFTRACE_DOPT_WATCH,
     UFTRACE_DOPT_CLOSE,			/* Close the connection with the client */
 	UFTRACE_DOPT_KILL,			/* Kill the daemon */
 };

@@ -24,6 +24,8 @@ int command_client(int argc, char *argv[], struct opts *opts) {
     struct sockaddr_un addr;
     char *channel = NULL;
     char command[MCOUNT_DOPT_SIZE];
+    int uid;
+    char *run_dir = NULL;
 
     sfd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (sfd == -1)
@@ -32,7 +34,10 @@ int command_client(int argc, char *argv[], struct opts *opts) {
     memset(&addr, 0, sizeof(struct sockaddr_un));
     addr.sun_family = AF_UNIX;
 
-    xasprintf(&channel, "%s/%s", opts->dirname, ".socket");
+    uid = getuid();
+    xasprintf(&run_dir, "/var/run/user/%d/uftrace", uid);
+    pr_dbg("%d\n", opts->pid);
+    xasprintf(&channel, "%s/%d.%s", run_dir, opts->pid, "socket");
     strncpy(addr.sun_path, channel,
             sizeof(addr.sun_path) - 1);
 
@@ -40,11 +45,24 @@ int command_client(int argc, char *argv[], struct opts *opts) {
                 sizeof(struct sockaddr_un)) == -1)
         pr_err("error connecting to socket");
 
+    if (opts->disabled) {
+        send_option(UFTRACE_DOPT_DISABLED);
+        if (write(sfd, &opts->disabled, sizeof(bool)) == -1)
+            pr_err("error sending options");
+    }
+
     if (opts->patt_type) {
         send_option(UFTRACE_DOPT_PATT_TYPE);
-
         if (write(sfd, &opts->patt_type,
                   sizeof(enum uftrace_pattern_type)) == -1)
+            pr_err("error sending options");
+    }
+
+    if (opts->depth) {
+        send_option(UFTRACE_DOPT_DEPTH);
+        pr_dbg3("changing depth\n");
+
+        if (write(sfd, &opts->depth, sizeof(int)) == -1)
             pr_err("error sending options");
     }
 
@@ -80,6 +98,15 @@ int command_client(int argc, char *argv[], struct opts *opts) {
             pr_err("error sending options");
     }
 
+    if (opts->trigger) {
+        pr_dbg3("changing trigger options\n");
+        send_option(UFTRACE_DOPT_TRIGGER);
+
+        strcpy(command, opts->trigger);
+        if (write(sfd, &command, MCOUNT_DOPT_SIZE) == -1)
+            pr_err("error sending options");
+    }
+
     if (opts->args) {
         pr_dbg3("changing argument options\n");
         send_option(UFTRACE_DOPT_ARGUMENT);
@@ -98,8 +125,20 @@ int command_client(int argc, char *argv[], struct opts *opts) {
             pr_err("error sending options");
     }
 
-    /* send_option(UFTRACE_DOPT_KILL);    /\* HACK artificial killing of the daemon *\/ */
-    send_option(UFTRACE_DOPT_CLOSE);
+    if (opts->watch) {
+        pr_dbg3("changing watchpoints options\n");
+        send_option(UFTRACE_DOPT_WATCH);
+
+        strcpy(command, opts->watch);
+        if (write(sfd, &command, MCOUNT_DOPT_SIZE) == -1)
+            pr_err("error sending options");
+    }
+
+    if (opts->kill) {
+        send_option(UFTRACE_DOPT_KILL);
+    } else {
+        send_option(UFTRACE_DOPT_CLOSE);
+    }
     close(sfd);
 
     return 0;
