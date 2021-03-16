@@ -36,7 +36,6 @@ int command_client(int argc, char *argv[], struct opts *opts) {
 
     uid = getuid();
     xasprintf(&run_dir, "/var/run/user/%d/uftrace", uid);
-    pr_dbg("%d\n", opts->pid);
     xasprintf(&channel, "%s/%d.%s", run_dir, opts->pid, "socket");
     strncpy(addr.sun_path, channel,
             sizeof(addr.sun_path) - 1);

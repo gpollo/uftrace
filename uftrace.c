@@ -103,7 +103,6 @@ enum options {
 	OPT_usage,
 	OPT_tracepoint_add,
 	OPT_tracepoint_remove,
-	OPT_pid,
 	OPT_kill,
 };
 
@@ -182,7 +181,7 @@ __used static const char uftrace_help[] =
 "      --port=PORT            Use PORT for network connection (default: "
 	stringify(UFTRACE_RECV_PORT) ")\n"
 "  -P, --patch=FUNC           Apply dynamic patching for FUNCs\n"
-"      --pid=PID              PID of the daemon\n"
+"  -p, --pid=PID              PID of the daemon\n"
 "      --record               Record a new trace data before running command\n"
 "      --report               Show live report\n"
 "      --rt-prio=PRIO         Record with real-time (FIFO) priority\n"
@@ -217,7 +216,7 @@ __used static const char uftrace_help[] =
 "\n";
 
 static const char uftrace_shopts[] =
-	"+aA:b:C:d:D:eE:f:F:hH:kK:lL:N:P:r:R:s:S:t:T:U:vVW:Z:";
+	"+aA:b:C:d:D:eE:f:F:hH:kK:lL:N:P:p:r:R:s:S:t:T:U:vVW:Z:";
 
 #define REQ_ARG(name, shopt) { #name, required_argument, 0, shopt }
 #define NO_ARG(name, shopt)  { #name, no_argument, 0, shopt }
@@ -305,7 +304,7 @@ static const struct option uftrace_options[] = {
 	NO_ARG(usage, OPT_usage),
 	NO_ARG(version, 'V'),
 	NO_ARG(estimate-return, 'e'),
-	REQ_ARG(pid, OPT_pid),
+	REQ_ARG(pid, 'p'),
 	NO_ARG(kill, OPT_kill),
 
 	{ 0 }
@@ -670,6 +669,10 @@ static int parse_option(struct opts *opts, int key, char *arg)
 		opts->estimate_return = true;
 		break;
 
+	case 'p':
+		opts->pid = atoi(arg);
+		break;
+
 	case 'V':
 		pr_out("%s\n", uftrace_version);
 		return -1;
@@ -941,10 +944,6 @@ static int parse_option(struct opts *opts, int key, char *arg)
 
 	case OPT_srcline:
 		opts->srcline = true;
-		break;
-
-	case OPT_pid:
-		opts->pid = atoi(arg);
 		break;
 
 	case OPT_kill:

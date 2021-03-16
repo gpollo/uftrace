@@ -83,6 +83,9 @@ static enum filter_mode __maybe_unused mcount_filter_mode = FILTER_MODE_NONE;
 /* tree of trigger actions */
 static struct rb_root __maybe_unused mcount_triggers = RB_ROOT;
 
+/* readers-writers lock for the RB tree */
+pthread_rwlock_t tree_rwlock = PTHREAD_RWLOCK_INITIALIZER;
+
 /* bitmask of active watch points */
 static unsigned long __maybe_unused mcount_watchpoints;
 
@@ -753,19 +756,22 @@ out:
 	raise(sig);
 }
 
-void* command_daemon(void *arg) {
+void *command_daemon(void *arg) {
 	/* TODO:
 	 * - libérer variables
 	 * - codes d'erreur */
 
 	int sfd, cfd;
-	struct sockaddr_un addr;
+	int uid, pid;
 	char buf[MCOUNT_DOPT_SIZE];
 	char *channel = NULL;
-	enum uftrace_dopt opt;
+	char *dirname;
+	char *run_dir = NULL;
 	bool close_connection, kill_daemon;
-	enum uftrace_pattern_type ptype = PATT_REGEX; /* FIXME use the global one */
 	bool disabled;
+	enum uftrace_dopt opt;
+	enum uftrace_pattern_type ptype = PATT_REGEX; /* FIXME use the global one */
+	struct sockaddr_un addr;
 	struct uftrace_filter_setting filter_setting = {
 	.ptype		= ptype,
 	.auto_args	= false,
@@ -773,8 +779,10 @@ void* command_daemon(void *arg) {
 	.lp64		= host_is_lp64(),
 	.arch		= host_cpu_arch()
     };
-	int uid, pid;
-	char *run_dir = NULL;
+
+	dirname = getenv("UFTRACE_DIR");
+	if (dirname == NULL)
+		dirname = UFTRACE_DIR_NAME;
 
 	sfd = socket(AF_UNIX, SOCK_STREAM, 0);
     if (sfd == -1)
@@ -785,18 +793,16 @@ void* command_daemon(void *arg) {
 
 	uid = getuid();
 	pid = getpid();
-	xasprintf(&run_dir, "/var/run/user/%d/uftrace", uid);
+	xasprintf(&run_dir, "/var/run/user/%d/uftrace", uid); /* FIXME define macro for filename? */
 	if (mkdir(run_dir, 0775) == -1) {
-		if (errno == EEXIST) {
-			pr_dbg3("skipping already existing run directory %s\n", run_dir);
-		} else {
+		if (errno == EEXIST)
+			pr_dbg3("skipping pre-existing run directory %s\n", run_dir);
+		else
 			pr_err("error creating run directory");
-		}
 	}
 
 	xasprintf(&channel, "%s/%d.%s", run_dir, pid, "socket");
-	strncpy(addr.sun_path, channel,
-            sizeof(addr.sun_path) - 1);
+	strncpy(addr.sun_path, channel, sizeof(addr.sun_path) - 1);
 	pr_dbg3("using socket %s\n", channel);
 
 	unlink(channel);
@@ -823,89 +829,105 @@ void* command_daemon(void *arg) {
 				pr_err("error reading options");
 
 			switch (opt) {
-				case UFTRACE_DOPT_DISABLED:
-					if (read(cfd, &disabled, sizeof(bool)) == -1)
-						pr_err("error reading option");
-					mcount_enabled = !disabled;
-					break;
-				case UFTRACE_DOPT_PATT_TYPE:
-					if (read(cfd, &ptype,
-							 sizeof(enum uftrace_pattern_type)) == -1)
-						pr_err("error reading option");
-					filter_setting.ptype = ptype;
-					break;
-				case UFTRACE_DOPT_DEPTH: /* FIXME */
-					if (read(cfd, &mcount_depth, sizeof(int)) == -1)
-						pr_err("error reading option");
-					break;
-				case UFTRACE_DOPT_PATCH: /* TODO */
-					if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
-						pr_err("error reading option");
-					pr_dbg("option not supported yet\n");
-					break;
-				case UFTRACE_DOPT_FILTER: /* -F or -N */
-					if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
-						pr_err("error reading option");
-					uftrace_setup_filter(buf,
-										 &symtabs,
-										 &mcount_triggers,
-										 &mcount_filter_mode,
-										 &filter_setting);
-					break;
-				case UFTRACE_DOPT_CALLER_FILTER:
-					if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
-						pr_err("error reading option");
-					uftrace_setup_caller_filter(buf,
-												&symtabs,
-												&mcount_triggers,
-												&filter_setting);
-					break;
-				case UFTRACE_DOPT_TRIGGER:
-					if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
-						pr_err("error reading option");
-					uftrace_setup_trigger(buf,
-										  &symtabs,
-										  &mcount_triggers,
-										  &mcount_filter_mode,
-										  &filter_setting);
-					break;
-				case UFTRACE_DOPT_ARGUMENT:
-					if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
-						pr_err("error reading option");
-					uftrace_setup_argument(buf,
-										   &symtabs,
-										   &mcount_triggers,
-										   &filter_setting);
-					break;
-				case UFTRACE_DOPT_RETVAL:
-					if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
-						pr_err("error reading option");
-					uftrace_setup_retval(buf,
-										 &symtabs,
-										 &mcount_triggers,
-										 &filter_setting);
-					break;
-				case UFTRACE_DOPT_WATCH:
-					if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
-						pr_err("error reading option");
+			case UFTRACE_DOPT_DISABLED:
+				if (read(cfd, &disabled, sizeof(bool)) == -1)
+					pr_err("error reading option");
+				mcount_enabled = !disabled;
+				break;
+			case UFTRACE_DOPT_PATT_TYPE:
+				if (read(cfd, &ptype,
+						 sizeof(enum uftrace_pattern_type)) == -1)
+					pr_err("error reading option");
+				filter_setting.ptype = ptype;
+				break;
+			case UFTRACE_DOPT_DEPTH: /* FIXME */
+				if (read(cfd, &mcount_depth, sizeof(int)) == -1)
+					pr_err("error reading option");
+				break;
+			case UFTRACE_DOPT_PATCH: /* TODO */
+				if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
+					pr_err("error reading option");
+				pr_dbg("option not supported yet\n");
+				break;
+			case UFTRACE_DOPT_FILTER: /* -F or -N */
+				if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
+					pr_err("error reading option");
+				pthread_rwlock_wrlock(&tree_rwlock);
+				uftrace_setup_filter(buf,
+									 &symtabs,
+									 &mcount_triggers,
+									 &mcount_filter_mode,
+									 &filter_setting);
+				pthread_rwlock_unlock(&tree_rwlock);
+				break;
+			case UFTRACE_DOPT_CALLER_FILTER:
+				if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
+					pr_err("error reading option");
+				pthread_rwlock_wrlock(&tree_rwlock);
+				uftrace_setup_caller_filter(buf,
+											&symtabs,
+											&mcount_triggers,
+											&filter_setting);
+				pthread_rwlock_unlock(&tree_rwlock);
+				break;
+			case UFTRACE_DOPT_TRIGGER:
+				if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
+					pr_err("error reading option");
+				pthread_rwlock_wrlock(&tree_rwlock);
+				uftrace_setup_trigger(buf,
+									  &symtabs,
+									  &mcount_triggers,
+									  &mcount_filter_mode,
+									  &filter_setting);
+				pthread_rwlock_unlock(&tree_rwlock);
+				break;
+			case UFTRACE_DOPT_ARGUMENT:
+				if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
+					pr_err("error reading option");
+				prepare_debug_info(&symtabs, ptype, buf, "", /* FIXME ne suffit pas */
+								   "", false); /* FIXME vérifier valeur de autoarg_str et force */
+				save_debug_info(&symtabs, dirname);
+				pthread_rwlock_wrlock(&tree_rwlock);
+				uftrace_setup_argument(buf,
+									   &symtabs,
+									   &mcount_triggers,
+									   &filter_setting);
+				pthread_rwlock_unlock(&tree_rwlock);
+				break;
+			case UFTRACE_DOPT_RETVAL:
+				if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
+					pr_err("error reading option");
+				prepare_debug_info(&symtabs, ptype, "", buf,
+								   "", false); /* FIXME vérifier valeur de autoarg_str et force */
+				save_debug_info(&symtabs, dirname);
+				pthread_rwlock_wrlock(&tree_rwlock);
+				uftrace_setup_retval(buf,
+									 &symtabs,
+									 &mcount_triggers,
+									 &filter_setting);
+				pthread_rwlock_unlock(&tree_rwlock);
+				break;
+			case UFTRACE_DOPT_WATCH:
+				if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
+					pr_err("error reading option");
 
-					watch = STRV_INIT;
-					strv_split(&watch, buf, ";");
-					strv_for_each(&watch, str, i) {
-						if (!strcasecmp(str, "cpu"))
-							mcount_watchpoints = MCOUNT_WATCH_CPU;
-					}
-					strv_free(&watch);
-					break;
-				case UFTRACE_DOPT_KILL:
-					kill_daemon = true;
-					__attribute__((fallthrough)); /* FALLTHROUGH */
-				case UFTRACE_DOPT_CLOSE:
-					close_connection = true;
-					break;
-				default:
-					pr_err("option not recognized");
-			}
+				watch = STRV_INIT;
+				strv_split(&watch, buf, ";");
+				strv_for_each(&watch, str, i) {
+					if (!strcasecmp(str, "cpu"))
+						mcount_watchpoints = MCOUNT_WATCH_CPU;
+				}
+				strv_free(&watch);
+				break;
+			case UFTRACE_DOPT_KILL:
+				kill_daemon = true;
+				__attribute__((fallthrough)); /* FALLTHROUGH */
+			case UFTRACE_DOPT_CLOSE:
+				close_connection = true;
+				break;
+			default:
+				pr_err("option not recognized");
+		   }
 		}
 		close(cfd);
 	}
@@ -1037,7 +1059,9 @@ enum filter_result mcount_entry_filter_check(struct mcount_thread_data *mtdp,
 	if (mtdp->filter.out_count > 0)
 		return FILTER_OUT;
 
+	pthread_rwlock_rdlock(&tree_rwlock);
 	uftrace_match_filter(child, &mcount_triggers, tr);
+	pthread_rwlock_unlock(&tree_rwlock);
 
 	pr_dbg3(" tr->flags: %x, filter mode: %d, count: %d/%d, depth: %d\n",
 		tr->flags, tr->fmode, mtdp->filter.in_count,
@@ -2089,8 +2113,6 @@ static __used void mcount_startup(void)
 
 	mcount_global_flags &= ~MCOUNT_GFL_SETUP;
 	mtd.recursion_marker = false;
-
-	/* pthread_join(daemon_thread, NULL); */
 }
 
 static void mcount_cleanup(void)
