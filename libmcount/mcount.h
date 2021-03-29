@@ -68,6 +68,9 @@ void _mcleanup(void);
 void mcount_restore(void);
 void mcount_reset(void);
 
+void str_merge_symbs(char* base, char* new);
+void *command_daemon(void *arg);
+
 #define SHMEM_BUFFER_SIZE_KB	128
 #define SHMEM_BUFFER_SIZE	(SHMEM_BUFFER_SIZE_KB * KB)
 

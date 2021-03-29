@@ -756,10 +756,30 @@ out:
 	raise(sig);
 }
 
+void str_merge_symbs(char* base, char* new) {
+	int i;
+	char *symb;
+	struct strv symbs = STRV_INIT;
+
+	strv_split(&symbs, new, ",");
+	strv_for_each(&symbs, symb, i) {
+		if (strstr(base, symb) == NULL) {
+			if (strlen(base) > 0)
+				strcat(base, ",");	/* FIXME vérifier la taille des buffers */
+			strcat(base, symb);
+		}
+	}
+
+	strv_free(&symbs);
+
+	return;
+}
+
 void *command_daemon(void *arg) {
 	/* TODO:
 	 * - libérer variables
-	 * - codes d'erreur */
+	 * - codes d'erreur
+	 * - répertorier les changements d'options (pour les arguments) */
 
 	int sfd, cfd;
 	int uid, pid;
@@ -767,6 +787,7 @@ void *command_daemon(void *arg) {
 	char *channel = NULL;
 	char *dirname;
 	char *run_dir = NULL;
+	char dyn_args_str[128], dyn_retval_str[128]; /* FIXME define larger sizes */
 	bool close_connection, kill_daemon;
 	bool disabled;
 	enum uftrace_dopt opt;
@@ -834,21 +855,25 @@ void *command_daemon(void *arg) {
 					pr_err("error reading option");
 				mcount_enabled = !disabled;
 				break;
+
 			case UFTRACE_DOPT_PATT_TYPE:
 				if (read(cfd, &ptype,
 						 sizeof(enum uftrace_pattern_type)) == -1)
 					pr_err("error reading option");
 				filter_setting.ptype = ptype;
 				break;
-			case UFTRACE_DOPT_DEPTH: /* FIXME */
+
+			case UFTRACE_DOPT_DEPTH: /* TODO */
 				if (read(cfd, &mcount_depth, sizeof(int)) == -1)
 					pr_err("error reading option");
 				break;
+
 			case UFTRACE_DOPT_PATCH: /* TODO */
 				if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
 					pr_err("error reading option");
 				pr_dbg("option not supported yet\n");
 				break;
+
 			case UFTRACE_DOPT_FILTER: /* -F or -N */
 				if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
 					pr_err("error reading option");
@@ -860,6 +885,7 @@ void *command_daemon(void *arg) {
 									 &filter_setting);
 				pthread_rwlock_unlock(&tree_rwlock);
 				break;
+
 			case UFTRACE_DOPT_CALLER_FILTER:
 				if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
 					pr_err("error reading option");
@@ -870,6 +896,7 @@ void *command_daemon(void *arg) {
 											&filter_setting);
 				pthread_rwlock_unlock(&tree_rwlock);
 				break;
+
 			case UFTRACE_DOPT_TRIGGER:
 				if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
 					pr_err("error reading option");
@@ -881,32 +908,31 @@ void *command_daemon(void *arg) {
 									  &filter_setting);
 				pthread_rwlock_unlock(&tree_rwlock);
 				break;
+
 			case UFTRACE_DOPT_ARGUMENT:
 				if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
 					pr_err("error reading option");
-				prepare_debug_info(&symtabs, ptype, buf, "", /* FIXME ne suffit pas */
-								   "", false); /* FIXME vérifier valeur de autoarg_str et force */
-				save_debug_info(&symtabs, dirname);
 				pthread_rwlock_wrlock(&tree_rwlock);
 				uftrace_setup_argument(buf,
 									   &symtabs,
 									   &mcount_triggers,
 									   &filter_setting);
+				str_merge_symbs(dyn_args_str, buf);
 				pthread_rwlock_unlock(&tree_rwlock);
 				break;
+
 			case UFTRACE_DOPT_RETVAL:
 				if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
 					pr_err("error reading option");
-				prepare_debug_info(&symtabs, ptype, "", buf,
-								   "", false); /* FIXME vérifier valeur de autoarg_str et force */
-				save_debug_info(&symtabs, dirname);
 				pthread_rwlock_wrlock(&tree_rwlock);
 				uftrace_setup_retval(buf,
 									 &symtabs,
 									 &mcount_triggers,
 									 &filter_setting);
+				str_merge_symbs(dyn_retval_str, buf);
 				pthread_rwlock_unlock(&tree_rwlock);
 				break;
+
 			case UFTRACE_DOPT_WATCH:
 				if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
 					pr_err("error reading option");
@@ -919,12 +945,15 @@ void *command_daemon(void *arg) {
 				}
 				strv_free(&watch);
 				break;
+
 			case UFTRACE_DOPT_KILL:
 				kill_daemon = true;
-				__attribute__((fallthrough)); /* FALLTHROUGH */
+				__attribute__((fallthrough)); /* fall through */
+
 			case UFTRACE_DOPT_CLOSE:
 				close_connection = true;
 				break;
+
 			default:
 				pr_err("option not recognized");
 		   }
@@ -934,6 +963,14 @@ void *command_daemon(void *arg) {
 
 	close(sfd);
 	unlink(channel);
+
+	/* Signaler les changements d'options à uftrace */
+	uftrace_send_message(UFTRACE_MSG_SEND_ARGS,
+						 dyn_args_str,
+						 strlen(dyn_args_str));
+	uftrace_send_message(UFTRACE_MSG_SEND_RETVAL,
+						 dyn_retval_str,
+						 strlen(dyn_retval_str));
 
 	return 0;
 }

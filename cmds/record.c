@@ -42,6 +42,12 @@ struct shmem_list {
 static LIST_HEAD(shmem_list_head);
 static LIST_HEAD(shmem_need_unlink);
 
+/* Options may be changed by the client. uftrace needs to keep track of symbols
+ * for which it needs debug info, and those symbols can be added by the client.
+ * Once the client is done, it sends uftrace the list of such symbols, then
+ * stored in these variables. */
+static char dyn_args_str[128], dyn_retval_str[128];
+
 struct buf_list {
 	struct list_head list;
 	int tid;
@@ -1275,6 +1281,30 @@ static void read_record_mmap(int pfd, const char *dirname, int bufsize)
 		finish_received = true;
 		break;
 
+	case UFTRACE_MSG_SEND_ARGS:
+		if (read_all(pfd, buf, msg.len) < 0)
+			pr_err("reading pipe failed");
+
+		buf[msg.len] = '\0';
+
+		pr_dbg2("MSG SEND_ARGS %s\n", buf);
+
+		strcpy(dyn_args_str, buf);
+
+		break;
+
+	case UFTRACE_MSG_SEND_RETVAL:
+		if (read_all(pfd, buf, msg.len) < 0)
+			pr_err("reading pipe failed");
+
+		buf[msg.len] = '\0';
+
+		pr_dbg2("MSG SEND_RETVAL %s\n", buf);
+
+		strcpy(dyn_retval_str, buf);
+
+		break;
+
 	default:
 		pr_warn("Unknown message type: %u\n", msg.type);
 		break;
@@ -2092,6 +2122,9 @@ int do_main_loop(int ready, struct opts *opts, int pid)
 		if (pollfd.revents & (POLLERR | POLLHUP))
 			break;
 	}
+
+	opts->args = strjoin(opts->args, dyn_args_str, ";");
+	opts->retval = strjoin(opts->retval, dyn_retval_str, ";");
 
 	ret = stop_tracing(&wd, opts);
 	finish_writers(&wd, opts);
