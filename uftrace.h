@@ -406,6 +406,7 @@ enum uftrace_dopt {
 	UFTRACE_DOPT_CALLER_FILTER,
 	UFTRACE_DOPT_ARGUMENT,
 	UFTRACE_DOPT_RETVAL,
+	UFTRACE_DOPT_THRESHOLD,
 	UFTRACE_DOPT_WATCH,
     UFTRACE_DOPT_CLOSE,			/* Close the connection with the client */
 	UFTRACE_DOPT_KILL,			/* Kill the daemon */

@@ -777,6 +777,7 @@ void str_merge_symbs(char* base, char* new) {
 
 void *command_daemon(void *arg) {
 	/* TODO:
+	 *
 	 * - libérer variables
 	 * - codes d'erreur
 	 * - répertorier les changements d'options (pour les arguments) */
@@ -787,11 +788,11 @@ void *command_daemon(void *arg) {
 	char *channel = NULL;
 	char *dirname;
 	char *run_dir = NULL;
-	char dyn_args_str[128], dyn_retval_str[128]; /* FIXME define larger sizes */
+	char dyn_args_str[MCOUNT_DOPT_SIZE], dyn_retval_str[MCOUNT_DOPT_SIZE];
 	bool close_connection, kill_daemon;
 	bool disabled;
 	enum uftrace_dopt opt;
-	enum uftrace_pattern_type ptype = PATT_REGEX; /* FIXME use the global one */
+	enum uftrace_pattern_type ptype = PATT_REGEX;
 	struct sockaddr_un addr;
 	struct uftrace_filter_setting filter_setting = {
 	.ptype		= ptype,
@@ -814,7 +815,7 @@ void *command_daemon(void *arg) {
 
 	uid = getuid();
 	pid = getpid();
-	xasprintf(&run_dir, "/var/run/user/%d/uftrace", uid); /* FIXME define macro for filename? */
+	xasprintf(&run_dir, "/var/run/user/%d/uftrace", uid);
 	if (mkdir(run_dir, 0775) == -1) {
 		if (errno == EEXIST)
 			pr_dbg3("skipping pre-existing run directory %s\n", run_dir);
@@ -826,13 +827,15 @@ void *command_daemon(void *arg) {
 	strncpy(addr.sun_path, channel, sizeof(addr.sun_path) - 1);
 	pr_dbg3("using socket %s\n", channel);
 
-	unlink(channel);
+	if (unlink(channel) == -1) {
+		if (errno != ENOENT)
+			pr_err("cannot unlink %s", channel);
+	}
 	if (bind(sfd, (struct sockaddr *) &addr,
 			 sizeof(struct sockaddr_un)) == -1)
 		pr_err("error binding to socket");
 
-	/* TODO: définir LISTEN_BACKLOG plutôt que 10 */
-	if (listen(sfd, 10) == -1)
+	if (listen(sfd, 1) == -1)
 		pr_err("error listening to socket");
 
 	kill_daemon = false;
@@ -866,12 +869,13 @@ void *command_daemon(void *arg) {
 			case UFTRACE_DOPT_DEPTH: /* TODO */
 				if (read(cfd, &mcount_depth, sizeof(int)) == -1)
 					pr_err("error reading option");
+				pr_warn("unsupported option: depth\n");
 				break;
 
 			case UFTRACE_DOPT_PATCH: /* TODO */
 				if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
 					pr_err("error reading option");
-				pr_dbg("option not supported yet\n");
+				pr_warn("unsupported option: patch\n");
 				break;
 
 			case UFTRACE_DOPT_FILTER: /* -F or -N */
@@ -933,6 +937,14 @@ void *command_daemon(void *arg) {
 				pthread_rwlock_unlock(&tree_rwlock);
 				break;
 
+			case UFTRACE_DOPT_THRESHOLD:
+				if (read(cfd, &mcount_threshold,
+						 sizeof(typeof(mcount_threshold))) == -1)
+					pr_err("error reading option");
+
+				pr_dbg3("received threshold: %d\n", mcount_threshold);
+				break;
+
 			case UFTRACE_DOPT_WATCH:
 				if (read(cfd, buf, MCOUNT_DOPT_SIZE) == -1)
 					pr_err("error reading option");
@@ -964,13 +976,17 @@ void *command_daemon(void *arg) {
 	close(sfd);
 	unlink(channel);
 
-	/* Signaler les changements d'options à uftrace */
+	/* Tell uftrace these options changed before it saves the original options
+	 * to disk. */
 	uftrace_send_message(UFTRACE_MSG_SEND_ARGS,
 						 dyn_args_str,
 						 strlen(dyn_args_str));
 	uftrace_send_message(UFTRACE_MSG_SEND_RETVAL,
 						 dyn_retval_str,
 						 strlen(dyn_retval_str));
+
+	free(channel);
+	free(run_dir);
 
 	return 0;
 }
@@ -1010,8 +1026,7 @@ struct mcount_thread_data * mcount_prepare(void)
 	if (!mcount_guard_recursion(mtdp))
 		return NULL;
 
-	pr_dbg2("staring daemon\n");
-	pthread_create(&daemon_thread, NULL, &command_daemon, NULL);
+	mcount_global_flags &= ~MCOUNT_GFL_SETUP;
 
 	compiler_barrier();
 
@@ -1540,6 +1555,9 @@ static int __mcount_entry(unsigned long *parent_loc, unsigned long child,
 			return -1;
 	}
 
+	#ifndef DISABLE_MCOUNT_FILTER		  /* FIXME Pas propre. Sinon l'attribut time n'est pas défini */
+	mtdp->filter.time = mcount_threshold; /* FIXME mutex pour cette variable globale? */
+	#endif
 	tr.flags = 0;
 	filtered = mcount_entry_filter_check(mtdp, child, &tr);
 	if (filtered != FILTER_IN) {
@@ -2144,6 +2162,9 @@ static __used void mcount_startup(void)
 	/* initialize script binding */
 	if (SCRIPT_ENABLED && script_str)
 		mcount_script_init(patt_type);
+
+	pr_dbg2("staring daemon\n");
+	pthread_create(&daemon_thread, NULL, &command_daemon, NULL);
 
 	compiler_barrier();
 	pr_dbg("mcount setup done\n");

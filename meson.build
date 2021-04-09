@@ -472,6 +472,7 @@ uftrace_include = include_directories('cmds')
 
 uftrace_sources = [
     'arch/' + arch + '/cpuinfo.c',
+    'cmds/client.c',
     'cmds/dump.c',
     'cmds/graph.c',
     'cmds/info.c',
