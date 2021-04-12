@@ -47,6 +47,7 @@ static LIST_HEAD(shmem_need_unlink);
  * Once the client is done, it sends uftrace the list of such symbols, then
  * stored in these variables. */
 static char dyn_args_str[128], dyn_retval_str[128];
+bool dargs_rcv = false, dretval_rcv = false;
 
 struct buf_list {
 	struct list_head list;
@@ -1284,25 +1285,21 @@ static void read_record_mmap(int pfd, const char *dirname, int bufsize)
 	case UFTRACE_MSG_SEND_ARGS:
 		if (read_all(pfd, buf, msg.len) < 0)
 			pr_err("reading pipe failed");
-
 		buf[msg.len] = '\0';
 
 		pr_dbg2("MSG SEND_ARGS %s\n", buf);
-
 		strcpy(dyn_args_str, buf);
-
+		dargs_rcv = true;
 		break;
 
 	case UFTRACE_MSG_SEND_RETVAL:
 		if (read_all(pfd, buf, msg.len) < 0)
 			pr_err("reading pipe failed");
-
 		buf[msg.len] = '\0';
 
 		pr_dbg2("MSG SEND_RETVAL %s\n", buf);
-
 		strcpy(dyn_retval_str, buf);
-
+		dretval_rcv = true;
 		break;
 
 	default:
@@ -2104,7 +2101,7 @@ int do_main_loop(int ready, struct opts *opts, int pid)
 	start_tracing(&wd, opts, ready);
 	close(ready);
 
-	while (!uftrace_done) {
+	while (!uftrace_done || !dargs_rcv || !dretval_rcv) {
 		struct pollfd pollfd = {
 			.fd = wd.pipefd,
 			.events = POLLIN,

@@ -870,6 +870,7 @@ void *command_daemon(void *arg) {
 				if (read(cfd, &mcount_depth, sizeof(int)) == -1)
 					pr_err("error reading option");
 				pr_warn("unsupported option: depth\n");
+				/* TODO */
 				break;
 
 			case UFTRACE_DOPT_PATCH: /* TODO */
