@@ -49,19 +49,22 @@ int command_client(int argc, char *argv[], struct opts *opts) {
             pr_err("error sending options");
     }
 
-    if (opts->patt_type) {
+    if (opts->patt_type != PATT_REGEX) { /* TODO: Plutôt ignorer les valeurs par défaut lors de la lecture des options */
         send_option(sfd, UFTRACE_DOPT_PATT_TYPE);
+        pr_dbg3("changing pattern type\n");
+
         if (write(sfd, &opts->patt_type,
                   sizeof(enum uftrace_pattern_type)) == -1)
             pr_err("error sending options");
     }
 
-    if (opts->depth) {
+    if (opts->depth != -1) { /* TODO: Plutôt ignorer les valeurs par défaut lors de la lecture des options */
         send_option(sfd, UFTRACE_DOPT_DEPTH);
         pr_dbg3("changing depth\n");
 
         if (write(sfd, &opts->depth, sizeof(int)) == -1)
             pr_err("error sending options");
+        pr_dbg3("depth: %d\n", opts->depth);
     }
 
     if (opts->patch) {

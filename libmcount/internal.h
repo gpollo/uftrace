@@ -122,7 +122,7 @@ static inline void finish_mem_region(struct mcount_mem_regions *regions) {}
  */
 struct mcount_thread_data {
 	int				tid;
-	int				idx;
+	int				idx, old_idx;
 	int				record_idx;
 	bool				recursion_marker;
 	bool				in_exception;

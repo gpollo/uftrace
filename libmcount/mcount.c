@@ -621,6 +621,7 @@ void mtd_dtor(void *arg)
 		free(mtdp->rstack);
 		mtdp->rstack = NULL;
 		mtdp->idx = 0;
+		mtdp->old_idx = -1;
 	}
 
 	mcount_filter_release(mtdp);
@@ -863,14 +864,13 @@ void *command_daemon(void *arg) {
 				if (read(cfd, &ptype,
 						 sizeof(enum uftrace_pattern_type)) == -1)
 					pr_err("error reading option");
-				filter_setting.ptype = ptype;
+				/* filter_setting.ptype = ptype; */
+				pr_warn("unsupported option: pattern\n");
 				break;
 
-			case UFTRACE_DOPT_DEPTH: /* TODO */
+			case UFTRACE_DOPT_DEPTH:
 				if (read(cfd, &mcount_depth, sizeof(int)) == -1)
 					pr_err("error reading option");
-				pr_warn("unsupported option: depth\n");
-				/* TODO */
 				break;
 
 			case UFTRACE_DOPT_PATCH: /* TODO */
@@ -942,8 +942,6 @@ void *command_daemon(void *arg) {
 				if (read(cfd, &mcount_threshold,
 						 sizeof(typeof(mcount_threshold))) == -1)
 					pr_err("error reading option");
-
-				pr_dbg3("received threshold: %d\n", mcount_threshold);
 				break;
 
 			case UFTRACE_DOPT_WATCH:
@@ -1102,6 +1100,13 @@ enum filter_result mcount_entry_filter_check(struct mcount_thread_data *mtdp,
 					     struct uftrace_trigger *tr)
 {
 	pr_dbg3("<%d> enter %lx\n", mtdp->idx, child);
+
+	mtdp->filter.time = mcount_threshold; /* FIXME mutex pour cette variable globale? */
+	if (mtdp->idx + 1 > mcount_depth) {
+		mtdp->filter.depth = 0;
+	} else if (mtdp->idx < mtdp->old_idx) {
+		mtdp->filter.depth = mcount_depth;
+	}
 
 	if (mcount_check_rstack(mtdp))
 		return FILTER_RSTACK;
@@ -1556,9 +1561,6 @@ static int __mcount_entry(unsigned long *parent_loc, unsigned long child,
 			return -1;
 	}
 
-	#ifndef DISABLE_MCOUNT_FILTER		  /* FIXME Pas propre. Sinon l'attribut time n'est pas défini */
-	mtdp->filter.time = mcount_threshold; /* FIXME mutex pour cette variable globale? */
-	#endif
 	tr.flags = 0;
 	filtered = mcount_entry_filter_check(mtdp, child, &tr);
 	if (filtered != FILTER_IN) {
@@ -1610,6 +1612,7 @@ static int __mcount_entry(unsigned long *parent_loc, unsigned long child,
 
 	mcount_entry_filter_record(mtdp, rstack, &tr, regs);
 	mcount_unguard_recursion(mtdp);
+	mtdp->old_idx = mtdp->idx;
 	return 0;
 }
 
