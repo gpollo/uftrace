@@ -1088,6 +1088,8 @@ int mcount_patch_func(struct mcount_dynamic_info *mdi, struct sym *sym,
 		      struct mcount_disasm_engine *disasm,
 		      unsigned min_size)
 {
+	printf("patch: %s\n", sym->name);
+
 	struct arch_dynamic_info *adi = mdi->arch;
 	int result = INSTRUMENT_SKIPPED;
 
@@ -1119,6 +1121,8 @@ int mcount_patch_func(struct mcount_dynamic_info *mdi, struct sym *sym,
 int mcount_unpatch_func(struct mcount_dynamic_info *mdi, struct sym *sym,
 			struct mcount_disasm_engine *disasm)
 {
+	printf("unpatch: %s\n", sym->name);
+
 	struct arch_dynamic_info *adi = mdi->arch;
 	int result = INSTRUMENT_SKIPPED;
 
